@@ -22,8 +22,6 @@ const TEACHER_NAV = [
   { label: 'Papers', items: [
     { id:'teacher-blueprint', icon:'⬢', label:'Blueprint Builder' },
     { id:'teacher-generate', icon:'✦', label:'Generate Paper' },
-    { id:'teacher-paper-view', icon:'◈', label:'Paper View' },
-    { id:'teacher-export', icon:'⬆', label:'Export' },
   ]},
   { label: 'Records', items: [
     { id:'teacher-history', icon:'◎', label:'History & Analytics' },

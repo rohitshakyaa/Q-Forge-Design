@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QForge UI System — PDF Export</title>
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #070a10;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    .print-page {
+      width: 1440px;
+      height: 900px;
+      overflow: hidden;
+      position: relative;
+      background: #070a10;
+      break-before: page;
+      break-inside: avoid;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .print-page:first-child {
+      break-before: auto;
+    }
+
+    /* Page label watermark */
+    .page-label {
+      position: absolute;
+      bottom: 12px;
+      right: 20px;
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 11px;
+      color: #4e5e74;
+      z-index: 999;
+      letter-spacing: 0.05em;
+    }
+
+    /* App shell overrides for print */
+    .qf-app { height: 900px !important; }
+    .qf-main { overflow: hidden !important; }
+    .qf-content { max-width: none !important; }
+
+    @media print {
+      @page {
+        size: 1440px 900px;
+        margin: 0;
+      }
+      body { width: 1440px; }
+      .print-page {
+        width: 1440px;
+        height: 900px;
+        page-break-inside: avoid;
+        break-inside: avoid;
+      }
+      .no-print { display: none !important; }
+    }
+
+    @media screen {
+      body { padding: 20px; display: flex; flex-direction: column; gap: 20px; align-items: center; }
+      .print-page { box-shadow: 0 4px 32px #00000080; border-radius: 4px; }
+      .screen-nav {
+        position: fixed; top: 20px; left: 20px; z-index: 9999;
+        background: #0d1119; border: 1px solid #1e2840;
+        border-radius: 8px; padding: 12px; width: 180px;
+        font-family: 'Inter', sans-serif;
+      }
+      .screen-nav-title { font-size: 11px; color: #4e5e74; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 8px; }
+      .screen-nav-item { font-size: 12px; color: #8896aa; padding: 3px 0; cursor: pointer; }
+      .screen-nav-item:hover { color: #dde4ef; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Screen navigation (screen only) -->
+  <div class="screen-nav no-print">
+    <div class="screen-nav-title">Jump to screen</div>
+    <div id="screen-nav-list"></div>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel" src="components/qf-tokens.jsx"></script>
+  <script type="text/babel" src="components/qf-landing.jsx"></script>
+  <script type="text/babel" src="components/qf-admin.jsx"></script>
+  <script type="text/babel" src="components/qf-teacher.jsx"></script>
+
+  <script type="text/babel">
+    // ── Shared shell for app screens ──────────────────────────────────
+    function PrintShell({ role='admin', screen, children, label }) {
+      const navItems = role === 'admin' ? [
+        { label:'Dashboard', items:[{id:'admin-dashboard',icon:'⬡',label:'Dashboard'}]},
+        { label:'Content', items:[{id:'admin-upload',icon:'⬆',label:'PDF Upload',badge:'2'},{id:'admin-extraction',icon:'◈',label:'Review Queue',badge:'3'},{id:'admin-question-bank',icon:'◉',label:'Question Bank'}]},
+        { label:'Management', items:[{id:'admin-subjects',icon:'⊞',label:'Subjects & Units'},{id:'admin-users',icon:'◎',label:'Users & Roles'}]},
+      ] : [
+        { label:null, items:[{id:'teacher-dashboard',icon:'⬡',label:'Dashboard'}]},
+        { label:'Papers', items:[{id:'teacher-blueprint',icon:'⬢',label:'Blueprint Builder'},{id:'teacher-generate',icon:'✦',label:'Generate Paper'},{id:'teacher-paper-view',icon:'◈',label:'Paper View'},{id:'teacher-export',icon:'⬆',label:'Export'}]},
+        { label:'Records', items:[{id:'teacher-history',icon:'◎',label:'History & Analytics'}]},
+      ];
+
+      return (
+        <div className="qf-app" style={{height:900}}>
+          {/* Topbar */}
+          <div className="qf-topbar">
+            <div style={{flex:1,display:'flex',alignItems:'center',gap:6}}>
+              <span style={{color:'var(--text3)',fontSize:12.5}}>{role==='admin'?'Admin':'Teacher'}</span>
+              <span style={{color:'var(--text3)'}}>›</span>
+              <span style={{fontSize:13,fontWeight:500,color:'var(--text)'}}>{label}</span>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <div style={{display:'flex',alignItems:'center',gap:6,padding:'5px 12px',background:'var(--ai-dim)',border:'1px solid oklch(0.72 0.18 230/0.25)',borderRadius:20}}>
+                <span style={{color:'var(--ai)',fontSize:12}}>✦</span>
+                <span style={{color:'var(--ai)',fontSize:12,fontWeight:500}}>AI Active</span>
+              </div>
+            </div>
+          </div>
+          <div className="qf-layout">
+            <QFSidebarNav items={navItems} active={screen} onNav={()=>{}} role={role} />
+            <div className="qf-main">
+              {children}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── All screens ───────────────────────────────────────────────────
+    const SCREENS = [
+      {
+        id: 'landing',
+        label: '01 Landing Page',
+        render: () => (
+          <div style={{height:900,overflow:'hidden',position:'relative'}}>
+            <LandingPage onEnter={()=>{}} />
+          </div>
+        )
+      },
+      {
+        id: 'auth',
+        label: '02 Authentication',
+        render: () => (
+          <div style={{height:900,overflow:'hidden'}}>
+            <AuthPage onAuth={()=>{}} />
+          </div>
+        )
+      },
+      {
+        id: 'admin-dashboard',
+        label: '03 Admin Dashboard',
+        render: () => (
+          <PrintShell role="admin" screen="admin-dashboard" label="Dashboard">
+            <AdminDashboard onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'admin-upload',
+        label: '04 PDF Upload',
+        render: () => (
+          <PrintShell role="admin" screen="admin-upload" label="PDF Upload">
+            <AdminUpload onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'admin-extraction',
+        label: '05 Question Extraction Review',
+        render: () => (
+          <PrintShell role="admin" screen="admin-extraction" label="Review Queue">
+            <AdminExtraction onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'admin-question-bank',
+        label: '06 Question Bank',
+        render: () => (
+          <PrintShell role="admin" screen="admin-question-bank" label="Question Bank">
+            <AdminQuestionBank onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'admin-subjects',
+        label: '07 Subjects & Units',
+        render: () => (
+          <PrintShell role="admin" screen="admin-subjects" label="Subjects & Units">
+            <AdminSubjects onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'admin-users',
+        label: '08 Users & Roles',
+        render: () => (
+          <PrintShell role="admin" screen="admin-users" label="Users & Roles">
+            <AdminUsers onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'teacher-dashboard',
+        label: '09 Teacher Dashboard',
+        render: () => (
+          <PrintShell role="teacher" screen="teacher-dashboard" label="Dashboard">
+            <TeacherDashboard onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'teacher-blueprint',
+        label: '10 Blueprint Builder',
+        render: () => (
+          <PrintShell role="teacher" screen="teacher-blueprint" label="Blueprint Builder">
+            <BlueprintBuilder onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'teacher-generate',
+        label: '11 Paper Generation',
+        render: () => (
+          <PrintShell role="teacher" screen="teacher-generate" label="Generate Paper">
+            <TeacherGenerate onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'teacher-paper-view',
+        label: '12 Generated Paper View',
+        render: () => (
+          <PrintShell role="teacher" screen="teacher-paper-view" label="Paper View">
+            <PaperView onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'teacher-export',
+        label: '13 Export',
+        render: () => (
+          <PrintShell role="teacher" screen="teacher-export" label="Export">
+            <TeacherExport onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+      {
+        id: 'teacher-history',
+        label: '14 History & Analytics',
+        render: () => (
+          <PrintShell role="teacher" screen="teacher-history" label="History & Analytics">
+            <TeacherHistory onNav={()=>{}} />
+          </PrintShell>
+        )
+      },
+    ];
+
+    function PrintDoc() {
+      return (
+        <>
+          <QFStyles />
+          {SCREENS.map((s, i) => (
+            <div key={s.id} id={`page-${s.id}`} className="print-page" data-screen-label={s.label}>
+              {s.render()}
+              <div className="page-label">QForge UI System · {s.label} · Page {i+1} of {SCREENS.length}</div>
+            </div>
+          ))}
+        </>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<PrintDoc />);
+
+    // Build screen nav (screen only)
+    setTimeout(() => {
+      const nav = document.getElementById('screen-nav-list');
+      if (!nav) return;
+      SCREENS.forEach(s => {
+        const el = document.createElement('div');
+        el.className = 'screen-nav-item';
+        el.textContent = s.label;
+        el.onclick = () => document.getElementById(`page-${s.id}`)?.scrollIntoView({behavior:'smooth'});
+        nav.appendChild(el);
+      });
+    }, 800);
+
+    // Auto-print after fonts + Babel settle
+    document.fonts.ready.then(() => {
+      setTimeout(() => { window.print(); }, 1200);
+    });
+  </script>
+</body>
+</html>

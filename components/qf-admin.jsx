@@ -369,52 +369,399 @@ function AdminQuestionBank({ onNav }) {
   );
 }
 
-function AdminSubjects({ onNav }) {
-  const subjects = [
-    { code:'CS301', name:'Data Structures', units:5, questions:142, teachers:3 },
-    { code:'CS302', name:'Algorithms', units:6, questions:198, teachers:4 },
-    { code:'CS303', name:'Database Management', units:7, questions:167, teachers:2 },
-    { code:'CS401', name:'Computer Networks', units:5, questions:89, teachers:3 },
-    { code:'MA201', name:'Discrete Mathematics', units:8, questions:224, teachers:5 },
-  ];
+const INIT_SUBJECTS = [
+  { code:'CS301', name:'Data Structures', teachers:3, description:'Fundamental data structures including arrays, linked lists, trees, and graphs.',
+    syllabus:'## CS301 – Data Structures\n\n**Course Overview:** This course covers fundamental data structures and their applications.\n\n### Unit 1: Arrays & Linked Lists\n- Static and dynamic arrays\n- Singly, doubly, and circular linked lists\n- Stack and Queue implementations\n\n### Unit 2: Trees\n- Binary trees and BST\n- AVL trees, Red-Black trees\n- Heap and Priority Queue\n\n### Unit 3: Graphs\n- Representation (adjacency matrix/list)\n- BFS, DFS traversal\n- Shortest path algorithms\n\n### Unit 4: Hashing\n- Hash functions\n- Collision resolution\n- Applications\n\n### Unit 5: Advanced Structures\n- Tries, Segment Trees\n- Disjoint Sets',
+    units:[
+      {id:1,name:'Arrays & Linked Lists',questions:[{id:1,text:'What is the time complexity of inserting at the beginning of a linked list?',marks:4,type:'Short Answer'},{id:2,text:'Compare arrays and linked lists in terms of memory and access time.',marks:6,type:'Long Answer'}]},
+      {id:2,name:'Trees',questions:[{id:3,text:'Define AVL tree and explain rotation operations.',marks:8,type:'Long Answer'},{id:4,text:'What is the height of a balanced BST with n nodes?',marks:4,type:'Short Answer'}]},
+      {id:3,name:'Graphs',questions:[{id:5,text:'Explain BFS and DFS with examples.',marks:10,type:'Long Answer'}]},
+      {id:4,name:'Hashing',questions:[{id:6,text:'Describe open addressing for collision resolution.',marks:5,type:'Short Answer'}]},
+      {id:5,name:'Advanced Structures',questions:[]},
+    ]},
+  { code:'CS302', name:'Algorithms', teachers:4, description:'Algorithm design, analysis, and complexity theory.',
+    syllabus:'## CS302 – Algorithms\n\n**Course Overview:** Design and analysis of algorithms.\n\n### Unit 1: Sorting & Searching\n- QuickSort, MergeSort, HeapSort\n- Binary Search\n\n### Unit 2: Hashing\n- Hash tables and applications\n\n### Unit 3: Graph Algorithms\n- Dijkstra, Bellman-Ford\n- MST: Prim, Kruskal\n\n### Unit 4: Dynamic Programming\n- Knapsack, LCS, Matrix Chain\n\n### Unit 5: Greedy Algorithms\n- Activity Selection, Huffman Coding\n\n### Unit 6: NP-Completeness\n- P vs NP, Reductions',
+    units:[
+      {id:1,name:'Sorting & Searching',questions:[{id:10,text:'Derive the time complexity of MergeSort.',marks:8,type:'Long Answer'},{id:11,text:'What is a stable sort? Give an example.',marks:4,type:'Short Answer'}]},
+      {id:2,name:'Hashing',questions:[{id:12,text:'What is a hash collision? Name two resolution techniques.',marks:5,type:'Short Answer'}]},
+      {id:3,name:'Graph Algorithms',questions:[{id:13,text:'Explain Dijkstra\'s algorithm with a worked example.',marks:12,type:'Long Answer'}]},
+      {id:4,name:'Dynamic Programming',questions:[{id:14,text:'Solve the 0/1 Knapsack problem using DP.',marks:10,type:'Long Answer'}]},
+      {id:5,name:'Greedy Algorithms',questions:[]},
+      {id:6,name:'NP-Completeness',questions:[]},
+    ]},
+  { code:'CS303', name:'Database Management', teachers:2, description:'Relational databases, SQL, normalization, and transactions.',
+    syllabus:'## CS303 – Database Management\n\n**Course Overview:** Principles of database systems.\n\n### Unit 1: Introduction\n- DBMS concepts and architecture\n- Data models\n\n### Unit 2: Relational Model & SQL\n- ER diagrams\n- SQL: DDL, DML, DCL\n\n### Unit 3: Normalization\n- 1NF, 2NF, 3NF, BCNF\n- Functional dependencies\n\n### Unit 4: Transactions\n- ACID properties\n- Concurrency control\n\n### Unit 5: Indexing\n- B+ trees, Hashing\n- Query optimization',
+    units:[
+      {id:1,name:'Introduction',questions:[{id:20,text:'What is a DBMS? List its advantages over file systems.',marks:5,type:'Short Answer'}]},
+      {id:2,name:'Relational Model & SQL',questions:[{id:21,text:'Write SQL to find the second highest salary from an Employee table.',marks:6,type:'Short Answer'},{id:22,text:'Explain ER diagrams with a university example.',marks:10,type:'Long Answer'}]},
+      {id:3,name:'Normalization',questions:[{id:23,text:'Define BCNF and explain with an example.',marks:8,type:'Long Answer'}]},
+      {id:4,name:'Transactions',questions:[]},
+      {id:5,name:'Indexing',questions:[]},
+    ]},
+];
+
+function SubjectDetail({ subject, onBack, onUpdate }) {
+  const [tab, setTab] = React.useState('overview');
+  const [subj, setSubj] = React.useState(subject);
+
+  // Unit state
+  const [unitModal, setUnitModal] = React.useState(null); // null | {id?,name:''}
+  const [deleteUnit, setDeleteUnit] = React.useState(null);
+  const [unitFilter, setUnitFilter] = React.useState('all');
+
+  // Question state
+  const [addQModal, setAddQModal] = React.useState(null); // null | {unitId, mode:'type'|'upload'}
+  const [newQ, setNewQ] = React.useState({text:'',marks:5,type:'Short Answer'});
+  const [uploading, setUploading] = React.useState(false);
+
+  // Syllabus state
+  const [syllabusMode, setSyllabusMode] = React.useState('view'); // view | edit | upload
+  const [syllabusEdit, setSyllabusEdit] = React.useState(subj.syllabus);
+  const [syllabusUploading, setSyllabusUploading] = React.useState(false);
+
+  const saveUnit = () => {
+    if (!unitModal?.name?.trim()) return;
+    if (unitModal.id) {
+      setSubj(s=>({...s, units:s.units.map(u=>u.id===unitModal.id?{...u,name:unitModal.name}:u)}));
+    } else {
+      setSubj(s=>({...s, units:[...s.units,{id:Date.now(),name:unitModal.name,questions:[]}]}));
+    }
+    setUnitModal(null);
+  };
+
+  const saveQuestion = () => {
+    if (!newQ.text.trim()) return;
+    setSubj(s=>({...s, units:s.units.map(u=>u.id===addQModal.unitId?{...u,questions:[...u.questions,{id:Date.now(),...newQ}]}:u)}));
+    setNewQ({text:'',marks:5,type:'Short Answer'});
+    setAddQModal(null);
+  };
+
+  const simulateUploadQ = () => {
+    setUploading(true);
+    setTimeout(()=>{
+      setSubj(s=>({...s, units:s.units.map(u=>u.id===addQModal.unitId?{...u,questions:[...u.questions,{id:Date.now(),text:'[Extracted] What is the significance of balanced trees in database indexing?',marks:6,type:'Short Answer'}]}:u)}));
+      setUploading(false);
+      setAddQModal(null);
+    }, 2000);
+  };
+
+  const simulateSyllabusUpload = () => {
+    setSyllabusUploading(true);
+    setTimeout(()=>{
+      setSubj(s=>({...s, syllabus:'## Updated Syllabus (Uploaded)\n\nThis syllabus was uploaded and replaced the previous one.\n\n### Unit 1\n- Topic A\n- Topic B\n\n### Unit 2\n- Topic C\n- Topic D'}));
+      setSyllabusEdit('## Updated Syllabus (Uploaded)\n\nThis syllabus was uploaded and replaced the previous one.\n\n### Unit 1\n- Topic A\n- Topic B\n\n### Unit 2\n- Topic C\n- Topic D');
+      setSyllabusUploading(false);
+      setSyllabusMode('view');
+    }, 2000);
+  };
+
+  const allQuestions = subj.units.flatMap(u=>u.questions.map(q=>({...q,unitName:u.name,unitId:u.id})));
+  const visibleQuestions = unitFilter==='all' ? allQuestions : allQuestions.filter(q=>q.unitId===+unitFilter);
 
   return (
     <div className="qf-content qf-anim-in">
-      <QFPageHeader title="Subjects & Units" subtitle="Manage academic subjects and their unit structure"
-        actions={<QFButton variant="primary">+ New Subject</QFButton>} />
-      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(280px,1fr))',gap:16}}>
-        {subjects.map(s => (
-          <QFCard key={s.code} style={{cursor:'pointer',transition:'border-color 0.15s'}} className="hover-card">
-            <div className="qf-card-body">
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
-                <span style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--cyan)',background:'var(--cyan-dim)',padding:'3px 8px',borderRadius:6}}>{s.code}</span>
-                <QFButton variant="ghost" size="sm">Edit</QFButton>
-              </div>
-              <div style={{fontFamily:'var(--font-head)',fontSize:16,fontWeight:700,marginBottom:4}}>{s.name}</div>
-              <div style={{display:'flex',gap:16,marginTop:12}}>
-                {[[s.units,'Units'],[s.questions,'Questions'],[s.teachers,'Teachers']].map(([val,lbl])=>(
-                  <div key={lbl} style={{textAlign:'center'}}>
-                    <div style={{fontFamily:'var(--font-head)',fontSize:20,fontWeight:700,color:'var(--text)'}}>{val}</div>
-                    <div style={{fontSize:11,color:'var(--text3)'}}>{lbl}</div>
-                  </div>
+      <QFPageHeader title={subj.name} subtitle={`${subj.code} · ${subj.units.length} units · ${allQuestions.length} questions`}
+        back="Subjects & Units" onBack={()=>{ onUpdate(subj); onBack(); }}
+        actions={<QFButton variant="primary" onClick={()=>setUnitModal({name:''})}>+ Add Unit</QFButton>}
+      />
+
+      {/* Tabs */}
+      <div className="qf-tabs" style={{display:'inline-flex',marginBottom:24}}>
+        {['overview','questions','syllabus'].map(t=>(
+          <div key={t} className={`qf-tab ${tab===t?'active':''}`} onClick={()=>setTab(t)} style={{textTransform:'capitalize'}}>{t}</div>
+        ))}
+      </div>
+
+      {/* ── OVERVIEW TAB ── */}
+      {tab==='overview' && (
+        <div className="qf-anim-in">
+          <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:20}}>
+            {/* Units list */}
+            <div>
+              <div style={{fontFamily:'var(--font-head)',fontWeight:600,fontSize:15,marginBottom:14}}>Units</div>
+              <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                {subj.units.map((u,i)=>(
+                  <QFCard key={u.id}>
+                    <div className="qf-card-body" style={{padding:'14px 18px'}}>
+                      <div style={{display:'flex',alignItems:'center',gap:12}}>
+                        <div style={{width:32,height:32,background:'var(--cyan-dim)',border:'1px solid var(--cyan)',borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',color:'var(--cyan)',fontWeight:700,fontSize:13,flexShrink:0}}>{i+1}</div>
+                        <div style={{flex:1}}>
+                          <div style={{fontWeight:600,fontSize:14}}>{u.name}</div>
+                          <div style={{fontSize:12,color:'var(--text3)',marginTop:2}}>{u.questions.length} question{u.questions.length!==1?'s':''}</div>
+                        </div>
+                        <div style={{display:'flex',gap:6}}>
+                          <QFButton variant="ghost" size="sm" onClick={()=>{setTab('questions');setUnitFilter(String(u.id));}}>View Qs</QFButton>
+                          <QFButton variant="secondary" size="sm" onClick={()=>setAddQModal({unitId:u.id,mode:'type'})}>+ Add Q</QFButton>
+                          <QFButton variant="ghost" size="sm" onClick={()=>setUnitModal({id:u.id,name:u.name})}>✏</QFButton>
+                          <QFButton variant="danger" size="sm" onClick={()=>setDeleteUnit(u)}>✕</QFButton>
+                        </div>
+                      </div>
+                    </div>
+                  </QFCard>
                 ))}
-              </div>
-              <div className="qf-divider" />
-              <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
-                {Array.from({length:s.units},(_,i)=>(
-                  <span key={i} className="qf-chip">Unit {i+1}</span>
-                ))}
+                {subj.units.length===0 && <QFEmptyState icon="⬢" title="No units yet" desc="Add the first unit to this subject." action={<QFButton variant="primary" onClick={()=>setUnitModal({name:''})}>+ Add Unit</QFButton>} />}
               </div>
             </div>
-          </QFCard>
-        ))}
-        <div style={{background:'var(--bg1)',border:'2px dashed var(--border)',borderRadius:'var(--radius-lg)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,cursor:'pointer',padding:32,transition:'border-color 0.15s',minHeight:160}}
-          onMouseEnter={e=>e.currentTarget.style.borderColor='var(--cyan)'}
-          onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border)'}>
+            {/* Subject info */}
+            <div style={{display:'flex',flexDirection:'column',gap:14}}>
+              <QFCard>
+                <div className="qf-card-body">
+                  <div style={{fontFamily:'var(--font-head)',fontWeight:600,marginBottom:14}}>Subject Info</div>
+                  {[[subj.units.length,'Units'],[allQuestions.length,'Questions'],[subj.teachers,'Teachers']].map(([v,l])=>(
+                    <div key={l} style={{display:'flex',justifyContent:'space-between',padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+                      <span style={{color:'var(--text2)',fontSize:13}}>{l}</span>
+                      <span style={{fontFamily:'var(--font-mono)',fontWeight:700,color:'var(--cyan)'}}>{v}</span>
+                    </div>
+                  ))}
+                  <div style={{marginTop:14}}>
+                    <div style={{fontSize:12,color:'var(--text3)',marginBottom:6}}>Description</div>
+                    <p style={{fontSize:13,color:'var(--text2)',lineHeight:1.6}}>{subj.description}</p>
+                  </div>
+                </div>
+              </QFCard>
+              <QFCard>
+                <div className="qf-card-body">
+                  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
+                    <div style={{fontFamily:'var(--font-head)',fontWeight:600}}>Syllabus</div>
+                    <QFButton variant="ghost" size="sm" onClick={()=>setTab('syllabus')}>Manage →</QFButton>
+                  </div>
+                  <div style={{fontSize:13,color:'var(--text2)',lineHeight:1.6,maxHeight:120,overflow:'hidden',position:'relative'}}>
+                    {subj.syllabus ? subj.syllabus.split('\n').slice(0,6).join('\n') : 'No syllabus uploaded.'}
+                    <div style={{position:'absolute',bottom:0,left:0,right:0,height:40,background:'linear-gradient(transparent,var(--bg1))'}} />
+                  </div>
+                </div>
+              </QFCard>
+              <QFButton variant="secondary" onClick={()=>setAddQModal({unitId:subj.units[0]?.id,mode:'type'})} style={{justifyContent:'center'}}>+ Add Question</QFButton>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── QUESTIONS TAB ── */}
+      {tab==='questions' && (
+        <div className="qf-anim-in">
+          <div style={{display:'flex',gap:12,marginBottom:20,alignItems:'center',flexWrap:'wrap'}}>
+            <select className="qf-input qf-select" value={unitFilter} onChange={e=>setUnitFilter(e.target.value)} style={{width:220}}>
+              <option value="all">All Units ({allQuestions.length} questions)</option>
+              {subj.units.map(u=><option key={u.id} value={String(u.id)}>{u.name} ({u.questions.length})</option>)}
+            </select>
+            <div style={{marginLeft:'auto',display:'flex',gap:8}}>
+              <QFButton variant="secondary" size="sm" onClick={()=>setAddQModal({unitId:subj.units[0]?.id,mode:'upload'})}>⬆ Upload PDF/Image</QFButton>
+              <QFButton variant="primary" size="sm" onClick={()=>setAddQModal({unitId:subj.units[0]?.id,mode:'type'})}>+ Add Question</QFButton>
+            </div>
+          </div>
+          {visibleQuestions.length===0
+            ? <QFEmptyState icon="◈" title="No questions" desc="This unit has no questions yet. Add them manually or upload a PDF." action={<QFButton variant="primary" onClick={()=>setAddQModal({unitId:+unitFilter||subj.units[0]?.id,mode:'type'})}>+ Add Question</QFButton>} />
+            : <div style={{display:'flex',flexDirection:'column',gap:10}}>
+                {visibleQuestions.map((q,i)=>(
+                  <QFCard key={q.id}>
+                    <div className="qf-card-body" style={{padding:'14px 18px'}}>
+                      <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+                        <span style={{fontFamily:'var(--font-mono)',fontSize:12,fontWeight:700,color:'var(--cyan)',flexShrink:0,marginTop:2}}>{i+1}.</span>
+                        <div style={{flex:1}}>
+                          <p style={{fontSize:13.5,lineHeight:1.6,marginBottom:8}}>{q.text}</p>
+                          <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+                            <QFBadge variant="neutral">{q.unitName}</QFBadge>
+                            <QFBadge variant="neutral">{q.type}</QFBadge>
+                            <QFBadge variant="neutral">{q.marks} marks</QFBadge>
+                          </div>
+                        </div>
+                        <QFButton variant="ghost" size="sm">Edit</QFButton>
+                      </div>
+                    </div>
+                  </QFCard>
+                ))}
+              </div>
+          }
+        </div>
+      )}
+
+      {/* ── SYLLABUS TAB ── */}
+      {tab==='syllabus' && (
+        <div className="qf-anim-in" style={{maxWidth:800}}>
+          <div style={{display:'flex',gap:8,marginBottom:20}}>
+            {['view','edit','upload'].map(m=>(
+              <QFButton key={m} variant={syllabusMode===m?'primary':'secondary'} size="sm" onClick={()=>setSyllabusMode(m)} style={{textTransform:'capitalize'}}>{m==='view'?'👁 View':m==='edit'?'✏ Edit Manually':'⬆ Upload'}</QFButton>
+            ))}
+          </div>
+
+          {syllabusMode==='view' && (
+            <QFCard className="qf-anim-in">
+              <div className="qf-card-body">
+                {subj.syllabus
+                  ? <pre style={{fontFamily:'var(--font-body)',fontSize:13.5,lineHeight:1.8,color:'var(--text2)',whiteSpace:'pre-wrap',wordBreak:'break-word'}}>{subj.syllabus}</pre>
+                  : <QFEmptyState icon="📄" title="No syllabus uploaded" desc="Upload a PDF or type the syllabus manually." action={<div style={{display:'flex',gap:8}}><QFButton variant="secondary" size="sm" onClick={()=>setSyllabusMode('edit')}>✏ Edit Manually</QFButton><QFButton variant="primary" size="sm" onClick={()=>setSyllabusMode('upload')}>⬆ Upload</QFButton></div>} />
+                }
+              </div>
+            </QFCard>
+          )}
+
+          {syllabusMode==='edit' && (
+            <div className="qf-anim-in" style={{display:'flex',flexDirection:'column',gap:12}}>
+              <QFAIHint>Editing replaces the current syllabus. Use Markdown for structure — headings (##, ###), bullets (-), bold (**text**).</QFAIHint>
+              <textarea className="qf-input qf-textarea" rows={22} value={syllabusEdit} onChange={e=>setSyllabusEdit(e.target.value)} style={{fontFamily:'var(--font-mono)',fontSize:13,lineHeight:1.7}} />
+              <div style={{display:'flex',gap:8,justifyContent:'flex-end'}}>
+                <QFButton variant="ghost" onClick={()=>{setSyllabusEdit(subj.syllabus);setSyllabusMode('view');}}>Cancel</QFButton>
+                <QFButton variant="primary" onClick={()=>{setSubj(s=>({...s,syllabus:syllabusEdit}));setSyllabusMode('view');}}>Save Syllabus</QFButton>
+              </div>
+            </div>
+          )}
+
+          {syllabusMode==='upload' && (
+            <div className="qf-anim-in" style={{display:'flex',flexDirection:'column',gap:14}}>
+              <div style={{background:'var(--warn-dim)',border:'1px solid var(--warn)',borderRadius:'var(--radius)',padding:'10px 14px',fontSize:13,color:'var(--warn)'}}>
+                ⚠ Uploading a new syllabus will <strong>replace</strong> the current one entirely.
+              </div>
+              {syllabusUploading
+                ? <QFCard><div className="qf-card-body" style={{textAlign:'center',padding:'40px'}}><QFSpinner size={32} /><div style={{marginTop:16,color:'var(--text2)'}}>Extracting syllabus from document…</div><QFProgress value={60} ai style={{marginTop:16}} /></div></QFCard>
+                : <div className="qf-dropzone" onClick={simulateSyllabusUpload} onDragOver={e=>{e.preventDefault()}} onDrop={e=>{e.preventDefault();simulateSyllabusUpload();}}>
+                    <div style={{fontSize:36,opacity:0.5}}>⬆</div>
+                    <div style={{fontFamily:'var(--font-head)',fontWeight:600,fontSize:15,color:'var(--text2)'}}>Drop syllabus PDF here or click to upload</div>
+                    <div style={{fontSize:13,color:'var(--text3)'}}>PDF, Word document, or image · Max 20MB</div>
+                    <div style={{fontSize:12.5,color:'var(--text3)'}}>AI will extract and structure the syllabus automatically</div>
+                    <QFButton variant="secondary" size="sm">Browse files</QFButton>
+                  </div>
+              }
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Modals ── */}
+      {/* Unit add/edit modal */}
+      <QFModal open={!!unitModal} onClose={()=>setUnitModal(null)} title={unitModal?.id?'Edit Unit':'Add Unit'} width={420}
+        footer={<><QFButton variant="ghost" onClick={()=>setUnitModal(null)}>Cancel</QFButton><QFButton variant="primary" onClick={saveUnit}>Save Unit</QFButton></>}>
+        <QFInput label="Unit name *" placeholder='e.g. "Graph Algorithms"' value={unitModal?.name||''} onChange={e=>setUnitModal(p=>({...p,name:e.target.value}))} />
+      </QFModal>
+
+      {/* Delete unit confirm */}
+      <QFModal open={!!deleteUnit} onClose={()=>setDeleteUnit(null)} title="Delete Unit" width={420}
+        footer={<><QFButton variant="ghost" onClick={()=>setDeleteUnit(null)}>Cancel</QFButton><QFButton variant="danger" onClick={()=>{setSubj(s=>({...s,units:s.units.filter(u=>u.id!==deleteUnit.id)}));setDeleteUnit(null);}}>Delete Unit</QFButton></>}>
+        <p style={{fontSize:14,color:'var(--text2)',lineHeight:1.6}}>Delete <strong style={{color:'var(--text)'}}>{deleteUnit?.name}</strong>? All {deleteUnit?.questions?.length||0} questions in this unit will also be removed.</p>
+      </QFModal>
+
+      {/* Add Question modal */}
+      <QFModal open={!!addQModal} onClose={()=>{setAddQModal(null);setUploading(false);}} title="Add Question" width={560}
+        footer={addQModal?.mode==='type'?<><QFButton variant="ghost" onClick={()=>setAddQModal(null)}>Cancel</QFButton><QFButton variant="primary" onClick={saveQuestion}>Add Question</QFButton></>:null}>
+        {addQModal && (
+          <div>
+            {/* Unit selector */}
+            <QFSelect label="Add to unit" value={String(addQModal.unitId)} onChange={e=>setAddQModal(p=>({...p,unitId:+e.target.value}))} options={subj.units.map(u=>({value:String(u.id),label:u.name}))} style={{marginBottom:16}} />
+            {/* Mode tabs */}
+            <div className="qf-tabs" style={{display:'inline-flex',marginBottom:16}}>
+              {[['type','✏ Type Manually'],['upload','⬆ Upload PDF / Image']].map(([m,l])=>(
+                <div key={m} className={`qf-tab ${addQModal.mode===m?'active':''}`} onClick={()=>setAddQModal(p=>({...p,mode:m}))}>{l}</div>
+              ))}
+            </div>
+            {addQModal.mode==='type' && (
+              <div style={{display:'flex',flexDirection:'column',gap:12}}>
+                <QFInput label="Question text *" type="textarea" rows={3} value={newQ.text} onChange={e=>setNewQ(p=>({...p,text:e.target.value}))} placeholder="Enter the full question here…" />
+                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+                  <QFInput label="Marks" type="number" value={String(newQ.marks)} onChange={e=>setNewQ(p=>({...p,marks:+e.target.value}))} />
+                  <QFSelect label="Question type" value={newQ.type} onChange={e=>setNewQ(p=>({...p,type:e.target.value}))} options={['Short Answer','Long Answer','MCQ','Programming','Case Study']} />
+                </div>
+              </div>
+            )}
+            {addQModal.mode==='upload' && (
+              <div>
+                {uploading
+                  ? <div style={{textAlign:'center',padding:'32px 0'}}><QFSpinner size={28} /><div style={{marginTop:12,color:'var(--text2)',fontSize:13}}>Extracting questions from document…</div><div style={{marginTop:12}}><QFProgress value={55} ai /></div></div>
+                  : <div className="qf-dropzone" onClick={simulateUploadQ} onDragOver={e=>e.preventDefault()} onDrop={e=>{e.preventDefault();simulateUploadQ();}}>
+                      <div style={{fontSize:36,opacity:0.5}}>⬆</div>
+                      <div style={{fontFamily:'var(--font-head)',fontWeight:600,color:'var(--text2)'}}>Drop file here or click to upload</div>
+                      <div style={{fontSize:12.5,color:'var(--text3)'}}>PDF, JPG, PNG · AI extracts questions automatically</div>
+                      <QFButton variant="secondary" size="sm">Browse files</QFButton>
+                    </div>
+                }
+                <QFAIHint style={{marginTop:12}}>Extracted questions will be added directly to the selected unit after AI processing.</QFAIHint>
+              </div>
+            )}
+          </div>
+        )}
+      </QFModal>
+    </div>
+  );
+}
+
+function AdminSubjects({ onNav }) {
+  const [subjects, setSubjects] = React.useState(INIT_SUBJECTS);
+  const [selected, setSelected] = React.useState(null);
+  const [showAdd, setShowAdd] = React.useState(false);
+  const [newSubj, setNewSubj] = React.useState({code:'',name:'',description:''});
+  const [deleteConfirm, setDeleteConfirm] = React.useState(null);
+
+  if (selected) {
+    return <SubjectDetail subject={selected} onBack={()=>setSelected(null)} onUpdate={updated=>setSubjects(ss=>ss.map(s=>s.code===updated.code?updated:s))} />;
+  }
+
+  const addSubject = () => {
+    if (!newSubj.code || !newSubj.name) return;
+    setSubjects(ss=>[...ss,{...newSubj,teachers:0,syllabus:'',units:[]}]);
+    setNewSubj({code:'',name:'',description:''});
+    setShowAdd(false);
+  };
+
+  return (
+    <div className="qf-content qf-anim-in">
+      <QFPageHeader title="Subjects & Units" subtitle="Manage academic subjects, units, questions, and syllabi"
+        actions={<QFButton variant="primary" onClick={()=>setShowAdd(true)}>+ New Subject</QFButton>} />
+      <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(300px,1fr))',gap:16}}>
+        {subjects.map(s => {
+          const totalQ = s.units.flatMap(u=>u.questions).length;
+          return (
+            <QFCard key={s.code} style={{transition:'all 0.15s'}}>
+              <div className="qf-card-body">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:12}}>
+                  <span style={{fontFamily:'var(--font-mono)',fontSize:12,color:'var(--cyan)',background:'var(--cyan-dim)',padding:'3px 8px',borderRadius:6}}>{s.code}</span>
+                  <div style={{display:'flex',gap:4}}>
+                    <QFButton variant="ghost" size="sm" onClick={()=>setDeleteConfirm(s)}>✕</QFButton>
+                  </div>
+                </div>
+                <div style={{fontFamily:'var(--font-head)',fontSize:16,fontWeight:700,marginBottom:4}}>{s.name}</div>
+                <p style={{fontSize:12.5,color:'var(--text3)',marginBottom:14,lineHeight:1.5}}>{s.description||'No description.'}</p>
+                <div style={{display:'flex',gap:12,marginBottom:14}}>
+                  {[[s.units.length,'Units'],[totalQ,'Questions'],[s.teachers,'Teachers']].map(([v,l])=>(
+                    <div key={l} style={{textAlign:'center',flex:1,background:'var(--bg2)',borderRadius:6,padding:'8px 0'}}>
+                      <div style={{fontFamily:'var(--font-head)',fontWeight:700,fontSize:18,color:'var(--text)'}}>{v}</div>
+                      <div style={{fontSize:10.5,color:'var(--text3)',marginTop:2}}>{l}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:14}}>
+                  {s.units.map((u,i)=><span key={u.id} className="qf-chip" style={{fontSize:11}}>{u.name||`Unit ${i+1}`}</span>)}
+                </div>
+                <div style={{borderTop:'1px solid var(--border)',paddingTop:12,display:'flex',gap:8}}>
+                  <QFButton variant="primary" size="sm" style={{flex:1,justifyContent:'center'}} onClick={()=>setSelected(s)}>Manage →</QFButton>
+                </div>
+              </div>
+            </QFCard>
+          );
+        })}
+        <div onClick={()=>setShowAdd(true)} style={{background:'var(--bg1)',border:'2px dashed var(--border)',borderRadius:'var(--radius-lg)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:10,cursor:'pointer',padding:32,minHeight:200,transition:'all 0.15s'}}
+          onMouseEnter={e=>{e.currentTarget.style.borderColor='var(--cyan)'}}
+          onMouseLeave={e=>{e.currentTarget.style.borderColor='var(--border)'}}>
           <div style={{fontSize:32,color:'var(--text3)'}}>+</div>
           <div style={{color:'var(--text3)',fontSize:13}}>Add new subject</div>
         </div>
       </div>
+
+      {/* Add Subject modal */}
+      <QFModal open={showAdd} onClose={()=>setShowAdd(false)} title="New Subject" width={460}
+        footer={<><QFButton variant="ghost" onClick={()=>setShowAdd(false)}>Cancel</QFButton><QFButton variant="primary" onClick={addSubject}>Create Subject</QFButton></>}>
+        <div style={{display:'flex',flexDirection:'column',gap:14}}>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}>
+            <QFInput label="Subject code *" placeholder="e.g. CS304" value={newSubj.code} onChange={e=>setNewSubj(p=>({...p,code:e.target.value}))} />
+            <QFInput label="Subject name *" placeholder="e.g. Operating Systems" value={newSubj.name} onChange={e=>setNewSubj(p=>({...p,name:e.target.value}))} />
+          </div>
+          <QFInput label="Description" type="textarea" rows={3} placeholder="Brief description of the subject…" value={newSubj.description} onChange={e=>setNewSubj(p=>({...p,description:e.target.value}))} />
+        </div>
+      </QFModal>
+
+      {/* Delete confirm */}
+      <QFModal open={!!deleteConfirm} onClose={()=>setDeleteConfirm(null)} title="Delete Subject" width={420}
+        footer={<><QFButton variant="ghost" onClick={()=>setDeleteConfirm(null)}>Cancel</QFButton><QFButton variant="danger" onClick={()=>{setSubjects(ss=>ss.filter(s=>s.code!==deleteConfirm.code));setDeleteConfirm(null);}}>Delete Subject</QFButton></>}>
+        <p style={{fontSize:14,color:'var(--text2)',lineHeight:1.6}}>Delete <strong style={{color:'var(--text)'}}>{deleteConfirm?.name} ({deleteConfirm?.code})</strong>? All units, questions, and the syllabus will be permanently removed.</p>
+      </QFModal>
     </div>
   );
 }
